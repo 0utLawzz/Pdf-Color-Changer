@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PDF Color Changer — Browser Edition</title>
+<!-- Local copies — no internet/CDN needed. Works from GitHub Pages AND by double-clicking this file offline. -->
+<script src="vendor/pdf.min.js"></script>
+<script src="vendor/jspdf.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#1b1a1f;
+    --panel:#242229;
+    --panel-border:#3a3742;
+    --ink:#ede9e4;
+    --ink-dim:#a9a4b0;
+    --maroon:#7a1128;
+    --maroon-bright:#a8182f;
+    --gold:#c9a24a;
+    --ok:#3f8f5f;
+    --err:#c14545;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    min-height:100vh;
+    background:
+      radial-gradient(circle at 15% 0%, rgba(122,17,40,0.18), transparent 45%),
+      radial-gradient(circle at 100% 100%, rgba(201,162,74,0.10), transparent 40%),
+      var(--bg);
+    color:var(--ink);
+    font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
+    display:flex;
+    justify-content:center;
+    padding:36px 18px 60px;
+  }
+  .wrap{ width:100%; max-width:640px; }
+  h1{
+    font-size:1.9rem;
+    letter-spacing:-0.01em;
+    margin:0 0 6px;
+    font-weight:700;
+  }
+  .maroon-word{ color:var(--maroon-bright); }
+  .tagline{ color:var(--ink-dim); margin:0 0 4px; line-height:1.5; max-width:56ch; }
+  .privacy{
+    display:inline-flex; align-items:center; gap:8px;
+    margin:14px 0 26px;
+    font-size:0.85rem;
+    color:var(--gold);
+    border:1px solid rgba(201,162,74,0.35);
+    background:rgba(201,162,74,0.08);
+    padding:8px 12px;
+    border-radius:6px;
+  }
+  .panel{
+    background:var(--panel);
+    border:1px solid var(--panel-border);
+    border-radius:10px;
+    padding:20px 20px 22px;
+    margin-bottom:16px;
+  }
+  .panel h2{
+    font-size:0.78rem;
+    text-transform:uppercase;
+    letter-spacing:.06em;
+    color:var(--ink-dim);
+    margin:0 0 14px;
+    font-weight:600;
+  }
+  .dropzone{
+    border:1.5px dashed var(--panel-border);
+    border-radius:8px;
+    padding:26px 16px;
+    text-align:center;
+    cursor:pointer;
+    transition:border-color .15s, background .15s;
+  }
+  .dropzone:hover, .dropzone.drag{
+    border-color:var(--maroon-bright);
+    background:rgba(122,17,40,0.08);
+  }
+  .dropzone p{ margin:4px 0; color:var(--ink-dim); font-size:0.9rem; }
+  .dropzone strong{ color:var(--ink); }
+  .filename{
+    margin-top:10px; font-size:0.85rem; color:var(--gold);
+    word-break:break-all;
+  }
+  input[type=file]{ display:none; }
+  .row{ display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+  select, input[type=text]{
+    background:#141318;
+    border:1px solid var(--panel-border);
+    color:var(--ink);
+    padding:9px 10px;
+    border-radius:6px;
+    font-size:0.9rem;
+    font-family:inherit;
+  }
+  select{ min-width:180px; }
+  input[type=text]{ width:110px; font-family:"Consolas",monospace; letter-spacing:.03em; }
+  input[type=color]{
+    width:42px; height:38px; border:none; border-radius:6px; background:none; cursor:pointer; padding:0;
+  }
+  label.small{ font-size:0.8rem; color:var(--ink-dim); display:block; margin-bottom:6px; }
+  .settings-grid{ display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+  input[type=range]{ width:100%; accent-color:var(--maroon-bright); }
+  .threshold-val{ font-size:0.8rem; color:var(--gold); font-family:"Consolas",monospace; }
+  .swatch-preview{
+    width:20px; height:20px; border-radius:4px; display:inline-block; vertical-align:middle;
+    border:1px solid rgba(255,255,255,0.2); margin-left:8px;
+  }
+  button.convert{
+    width:100%;
+    padding:14px;
+    font-size:1rem;
+    font-weight:600;
+    border:none;
+    border-radius:8px;
+    background:var(--maroon);
+    color:#fff;
+    cursor:pointer;
+    transition:background .15s, opacity .15s;
+    letter-spacing:.01em;
+  }
+  button.convert:hover:not(:disabled){ background:var(--maroon-bright); }
+  button.convert:disabled{ opacity:.4; cursor:not-allowed; }
+  .status{
+    margin-top:14px; font-size:0.88rem; color:var(--ink-dim); min-height:1.3em;
+  }
+  .status.err{ color:var(--err); }
+  .status.ok{ color:var(--ok); }
+  .progress-track{
+    height:6px; border-radius:3px; background:#141318; overflow:hidden; margin-top:10px; display:none;
+  }
+  .progress-fill{
+    height:100%; width:0%; background:linear-gradient(90deg,var(--maroon),var(--gold));
+    transition:width .2s;
+  }
+  a.download-link{
+    display:none;
+    margin-top:14px;
+    text-align:center;
+    background:var(--ok);
+    color:#fff;
+    text-decoration:none;
+    padding:12px;
+    border-radius:8px;
+    font-weight:600;
+  }
+  .footnote{
+    font-size:0.78rem; color:var(--ink-dim); margin-top:18px; line-height:1.6;
+  }
+  .footnote code{ color:var(--gold); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>PDF <span class="maroon-word">Color</span> Changer</h1>
+  <p class="tagline">Dark text, table borders aur lines ka color badlein — wording aur layout bilkul waisi hi rehti hai.</p>
+  <div class="privacy">🔒 100% browser mein chalta hai — koi PDF kabhi upload nahi hoti</div>
+  <div class="privacy">📴 Internet na ho tab bhi chalta hai — ye file offline double-click karke kholi ja sakti hai</div>
+
+  <div class="panel">
+    <h2>1. PDF Chunein</h2>
+    <div class="dropzone" id="dropzone">
+      <p><strong>Click karein</strong> ya PDF yahan drag-drop karein</p>
+      <p>Sirf .pdf files</p>
+      <div class="filename" id="filename"></div>
+    </div>
+    <input type="file" id="fileInput" accept="application/pdf">
+  </div>
+
+  <div class="panel">
+    <h2>2. Color Chunein</h2>
+    <div class="row">
+      <select id="preset"></select>
+      <input type="text" id="hexInput" value="#480012" maxlength="7">
+      <input type="color" id="colorPicker" value="#480012">
+      <span class="swatch-preview" id="swatchPreview" style="background:#480012;"></span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>3. Settings</h2>
+    <div class="settings-grid">
+      <div>
+        <label class="small">Resolution (DPI)</label>
+        <select id="dpi">
+          <option value="150">150 (fast, chota file)</option>
+          <option value="200">200</option>
+          <option value="300" selected>300 (recommended)</option>
+          <option value="400">400</option>
+          <option value="600">600 (sharp, bara file)</option>
+        </select>
+      </div>
+      <div>
+        <label class="small">Darkness threshold — <span class="threshold-val" id="threshVal">125</span></label>
+        <input type="range" id="threshold" min="70" max="180" value="125">
+      </div>
+    </div>
+  </div>
+
+  <button class="convert" id="convertBtn" disabled>CONVERT PDF</button>
+  <div class="progress-track" id="progressTrack"><div class="progress-fill" id="progressFill"></div></div>
+  <div class="status" id="status">Pehle ek PDF file chunein.</div>
+  <a class="download-link" id="downloadLink">⬇ Converted PDF Download Karein</a>
+
+  <p class="footnote">
+    Recommended for TM-11 forms: <code>Extra Dark Maroon #480012</code> • <code>Deep Dark Green #14532D</code><br>
+    Note: har page ek image ke tor par process hota hai (jaisa original desktop tool karta hai) — is liye text select/copy nahi hoga, lekin printing/scanning ke liye ye bilkul theek hai.
+  </p>
+
+</div>
+
+<script>
+// Online (GitHub Pages / any server): use the local worker file for best performance.
+// Offline (file:// — double-clicked directly from the folder): Chrome blocks Workers
+// loaded from file:// URLs for security reasons, so here we deliberately do NOT set
+// workerSrc. PDF.js then automatically falls back to its "fake worker" (same-thread)
+// mode — slightly slower, but 100% reliable with zero internet, in every browser.
+if (location.protocol !== 'file:') {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = "vendor/pdf.worker.min.js";
+}
+
+// ---- Same presets as the original Python desktop tool ----
+const PRESETS = {
+  "Extra Dark Maroon": "#480012",
+  "Dark Maroon": "#5A1020",
+  "Dark Orange": "#C84B00",
+  "Deep Dark Green": "#14532D",
+  "Dark Green": "#1B5E20",
+  "Navy Blue": "#123A63",
+  "Black": "#000000",
+  "Custom…": null
+};
+
+const presetSelect = document.getElementById('preset');
+Object.keys(PRESETS).forEach(name=>{
+  const opt = document.createElement('option');
+  opt.value = name; opt.textContent = name;
+  presetSelect.appendChild(opt);
+});
+presetSelect.value = "Extra Dark Maroon";
+
+const hexInput = document.getElementById('hexInput');
+const colorPicker = document.getElementById('colorPicker');
+const swatchPreview = document.getElementById('swatchPreview');
+const dpiSelect = document.getElementById('dpi');
+const thresholdInput = document.getElementById('threshold');
+const threshVal = document.getElementById('threshVal');
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+const filenameEl = document.getElementById('filename');
+const convertBtn = document.getElementById('convertBtn');
+const statusEl = document.getElementById('status');
+const progressTrack = document.getElementById('progressTrack');
+const progressFill = document.getElementById('progressFill');
+const downloadLink = document.getElementById('downloadLink');
+
+let selectedFile = null;
+
+// -- Preset dropdown changes the hex + swatch --
+presetSelect.addEventListener('change', ()=>{
+  const hex = PRESETS[presetSelect.value];
+  if(hex){ hexInput.value = hex; colorPicker.value = hex; updateSwatch(); }
+});
+
+// -- Native color picker changes hex + sets preset to Custom --
+colorPicker.addEventListener('input', ()=>{
+  hexInput.value = colorPicker.value.toUpperCase();
+  presetSelect.value = "Custom…";
+  updateSwatch();
+});
+
+// -- Manually typed hex --
+hexInput.addEventListener('input', ()=>{
+  const v = hexInput.value.trim();
+  if(/^#[0-9a-fA-F]{6}$/.test(v)){
+    colorPicker.value = v;
+    presetSelect.value = "Custom…";
+  }
+  updateSwatch();
+});
+
+function updateSwatch(){
+  const v = hexInput.value.trim();
+  if(/^#[0-9a-fA-F]{6}$/.test(v)) swatchPreview.style.background = v;
+}
+
+thresholdInput.addEventListener('input', ()=>{ threshVal.textContent = thresholdInput.value; });
+
+// -- File selection (click or drag-drop) --
+dropzone.addEventListener('click', ()=> fileInput.click());
+fileInput.addEventListener('change', e=> handleFile(e.target.files[0]));
+
+['dragover','dragleave','drop'].forEach(evt=>{
+  dropzone.addEventListener(evt, e=>{
+    e.preventDefault();
+    if(evt==='dragover') dropzone.classList.add('drag');
+    if(evt==='dragleave' || evt==='drop') dropzone.classList.remove('drag');
+  });
+});
+dropzone.addEventListener('drop', e=>{
+  const f = e.dataTransfer.files[0];
+  if(f) handleFile(f);
+});
+
+function handleFile(f){
+  if(!f) return;
+  if(f.type !== 'application/pdf' && !f.name.toLowerCase().endsWith('.pdf')){
+    setStatus('Sirf PDF files allowed hain.', 'err');
+    return;
+  }
+  selectedFile = f;
+  filenameEl.textContent = "✓ " + f.name;
+  convertBtn.disabled = false;
+  setStatus('Ready. "CONVERT PDF" dabayein.');
+  downloadLink.style.display = 'none';
+}
+
+function setStatus(msg, type){
+  statusEl.textContent = msg;
+  statusEl.className = 'status' + (type ? ' '+type : '');
+}
+
+function hexToRgb(hex){
+  hex = hex.trim().replace('#','');
+  if(hex.length !== 6) throw new Error('HEX must look like #480012');
+  return [
+    parseInt(hex.slice(0,2),16),
+    parseInt(hex.slice(2,4),16),
+    parseInt(hex.slice(4,6),16)
+  ];
+}
+
+// ---- EXACT same math as the Python recolor() function ----
+function lum(r,g,b){ return 0.2126*r + 0.7152*g + 0.0722*b; }
+
+function recolorImageData(imageData, target, threshold){
+  const d = imageData.data; // Uint8ClampedArray, RGBA
+  const [tr,tg,tb] = target;
+  for(let i=0; i<d.length; i+=4){
+    const r=d[i], g=d[i+1], b=d[i+2];
+    const L = lum(r,g,b);
+    const sat = Math.max(r,g,b) - Math.min(r,g,b);
+    // Recolor dark neutral pixels; preserve existing saturated artwork (same rule as Python)
+    if(L <= threshold && !(sat > 45 && L > 45)){
+      let s;
+      if(L < threshold*0.65){ s = 1; }
+      else { s = Math.max(0, Math.min(1, (threshold-L)/threshold)); }
+      // Math.trunc (not Math.round) — matches Python's int() truncation exactly
+      d[i]   = Math.trunc(r*(1-s) + tr*s);
+      d[i+1] = Math.trunc(g*(1-s) + tg*s);
+      d[i+2] = Math.trunc(b*(1-s) + tb*s);
+    }
+  }
+}
+
+convertBtn.addEventListener('click', async ()=>{
+  if(!selectedFile) return;
+  let target;
+  try{ target = hexToRgb(hexInput.value); }
+  catch(e){ setStatus(e.message, 'err'); return; }
+
+  const dpi = parseInt(dpiSelect.value, 10);
+  const threshold = parseInt(thresholdInput.value, 10);
+
+  convertBtn.disabled = true;
+  downloadLink.style.display = 'none';
+  progressTrack.style.display = 'block';
+  progressFill.style.width = '0%';
+  setStatus('PDF load ho raha hai…');
+
+  try{
+    const arrayBuffer = await selectedFile.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    const { jsPDF } = window.jspdf;
+    const scale = dpi / 72;
+    let outPdf = null;
+
+    for(let pageNum=1; pageNum<=pdf.numPages; pageNum++){
+      setStatus(`Processing page ${pageNum} of ${pdf.numPages}…`);
+      progressFill.style.width = Math.round((pageNum-1)/pdf.numPages*100) + '%';
+
+      const page = await pdf.getPage(pageNum);
+      const viewport = page.getViewport({ scale });
+
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.ceil(viewport.width);
+      canvas.height = Math.ceil(viewport.height);
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+      // White background first (matches PyMuPDF's alpha=False white-backed render)
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      await page.render({ canvasContext: ctx, viewport }).promise;
+
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      recolorImageData(imageData, target, threshold);
+      ctx.putImageData(imageData, 0, 0);
+
+      const jpegData = canvas.toDataURL('image/jpeg', 0.92);
+
+      // Page size in PDF points (72 dpi), independent of our render DPI
+      const basePageViewport = page.getViewport({ scale: 1 });
+      const wPt = basePageViewport.width, hPt = basePageViewport.height;
+      const orientation = wPt > hPt ? 'landscape' : 'portrait';
+
+      if(!outPdf){
+        outPdf = new jsPDF({ orientation, unit: 'pt', format: [wPt, hPt] });
+      } else {
+        outPdf.addPage([wPt, hPt], orientation);
+      }
+      outPdf.addImage(jpegData, 'JPEG', 0, 0, wPt, hPt);
+    }
+
+    progressFill.style.width = '100%';
+    const blob = outPdf.output('blob');
+    const url = URL.createObjectURL(blob);
+    const baseName = selectedFile.name.replace(/\.pdf$/i, '');
+    downloadLink.href = url;
+    downloadLink.download = baseName + '_COLOR_CHANGED.pdf';
+    downloadLink.style.display = 'block';
+    downloadLink.textContent = '⬇ Download: ' + baseName + '_COLOR_CHANGED.pdf';
+
+    setStatus(`Done — ${pdf.numPages} page(s) convert ho gaye.`, 'ok');
+  }catch(err){
+    console.error(err);
+    setStatus('Error: ' + err.message, 'err');
+  }finally{
+    convertBtn.disabled = false;
+  }
+});
+</script>
+</body>
+</html>
