@@ -1,0 +1,25 @@
+# Byte-compiled / optimized files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+env/
+.venv/
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+
+# OS junk files
+.DS_Store
+Thumbs.db
+
+# Editor/IDE folders
+.vscode/
+.idea/
+
+# Sample/output PDFs you don't want to publish
+*_COLOR_CHANGED.pdf
